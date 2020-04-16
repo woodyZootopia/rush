@@ -17,12 +17,19 @@ pub mod rsh_loop {
 
     pub fn rsh_split_line(line: String) -> CommandConfig {
         let mut inputs = line.split_ascii_whitespace();
-        let command: String = inputs.next().unwrap().to_string();
-        let mut args = Vec::new();
-        while let Some(arg) = inputs.next() {
-            args.push(arg.to_string());
+        if let Some(command) = inputs.next() {
+            let command = command.to_string();
+            let mut args = Vec::new();
+            while let Some(arg) = inputs.next() {
+                args.push(arg.to_string());
+            }
+            CommandConfig { command, args }
+        } else {
+            CommandConfig {
+                command: String::new(),
+                args: Vec::new(),
+            }
         }
-        CommandConfig { command, args }
     }
 
     pub enum Status {
