@@ -61,7 +61,7 @@ pub mod rsh_loop {
         Status::Success
     }
 
-    pub fn print_command(config: CommandConfig) {
+    fn print_command(config: CommandConfig) {
         println!(
             "Command is {},\n args are {:?}",
             config.command, config.args
