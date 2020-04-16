@@ -1,6 +1,7 @@
 extern crate nix;
 
 pub mod rsh_loop {
+    use nix::sys::wait::*;
     use nix::unistd::*;
     use std::io;
 
@@ -40,10 +41,22 @@ pub mod rsh_loop {
         print_command(config);
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
+                // parent
                 println!("I'm parent. Child PID is {}", child);
+                loop {
+                    let waitresult = waitpid(child, Some(WaitPidFlag::WUNTRACED));
+                    match waitresult.unwrap() {
+                        WaitStatus::Exited(..) | WaitStatus::Signaled(..) => break,
+                        _ => (),
+                    }
+                }
             }
-            Ok(ForkResult::Child) => println!("I'm child",),
-            Err(_) => println!("Fork failed",),
+            Ok(ForkResult::Child) => {
+                // child
+                println!("I'm child");
+                //do command
+            }
+            Err(_) => panic!("Fork failed",),
         }
         Status::Success
     }
