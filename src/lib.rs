@@ -1,5 +1,7 @@
+extern crate nix;
 
 pub mod rsh_loop {
+    use nix::unistd::*;
     use std::io;
 
     pub struct CommandConfig {
@@ -29,6 +31,13 @@ pub mod rsh_loop {
 
     pub fn rsh_execute(config: CommandConfig) -> Status {
         print_command(config);
+        match fork() {
+            Ok(ForkResult::Parent { child, .. }) => {
+                println!("I'm parent. Child PID is {}", child);
+            }
+            Ok(ForkResult::Child) => println!("I'm child",),
+            Err(_) => println!("Fork failed",),
+        }
         Status::Success
     }
 
