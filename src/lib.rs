@@ -1,22 +1,36 @@
 extern crate nix;
 
-pub mod rsh_loop {
+pub mod rsh {
     use nix::sys::wait::*;
     use nix::unistd::*;
     use std::io;
+    use std::io::Write;
 
-    pub struct CommandConfig<'a> {
+    pub fn rsh_loop() {
+        loop {
+            print!("> ");
+            io::stdout().flush().unwrap(); // make sure above `> ` is printed
+            let line = rsh_read_line();
+            let args = rsh_split_line(&line);
+            match rsh_execute(args) {
+                Some(Status::Exit) => break,
+                _ => (),
+            }
+        }
+    }
+
+    struct CommandConfig<'a> {
         pub command: Option<&'a str>,
         pub args: Vec<&'a str>,
     }
 
-    pub fn rsh_read_line() -> String {
+    fn rsh_read_line() -> String {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
         return input;
     }
 
-    pub fn rsh_split_line<'a>(line: &'a str) -> CommandConfig<'a> {
+    fn rsh_split_line<'a>(line: &'a str) -> CommandConfig<'a> {
         let mut inputs = line.split_ascii_whitespace();
         if let Some(command) = inputs.next() {
             let mut args = Vec::new();
@@ -35,22 +49,22 @@ pub mod rsh_loop {
         }
     }
 
-    pub enum Status {
+    enum Status {
         Success,
         Exit,
     }
 
-    pub fn rsh_execute(config: CommandConfig) -> Option<Status> {
+    fn rsh_execute(config: CommandConfig) -> Option<Status> {
         match config.command {
             Some("cd") => rsh_cd(config.args),
             Some("help") => rsh_help(config.args),
             Some("exit") => rsh_exit(config.args),
+            Some("pwd") => rsh_pwd(config.args),
             _ => rsh_launch(config),
         }
     }
 
-    fn rsh_launch(config: CommandConfig) -> Option<Status> {
-        print_command(config);
+    fn rsh_launch(_config: CommandConfig) -> Option<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -69,6 +83,7 @@ pub mod rsh_loop {
                 // child
                 println!("I'm child");
                 //do command
+                // execv();
                 Some(Status::Exit)
             }
             Err(_) => None,
@@ -87,6 +102,7 @@ pub mod rsh_loop {
             args.len() > 0,
             "going to home directory just by `cd` is not supported for now"
         );
+        chdir(args[0]).map(|_| Status::Success).map_err(|err| println!("{}", err.to_string()));
         Some(Status::Success)
     }
 
@@ -96,7 +112,13 @@ pub mod rsh_loop {
         // println!("The following commands are built in:",);
         Some(Status::Success)
     }
+
     fn rsh_exit(_args: Vec<&str>) -> Option<Status> {
         Some(Status::Exit)
+    }
+
+    fn rsh_pwd(_args: Vec<&str>) -> Option<Status> {
+        println!("{:?}", getcwd().unwrap());
+        Some(Status::Success)
     }
 }
