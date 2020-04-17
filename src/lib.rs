@@ -37,9 +37,10 @@ pub mod rsh_loop {
 
     pub enum Status {
         Success,
+        Exit,
     }
 
-    pub fn rsh_execute(config: CommandConfig) -> Status {
+    pub fn rsh_execute(config: CommandConfig) -> Option<Status> {
         match config.command {
             Some("cd") => rsh_cd(config.args),
             Some("help") => rsh_help(config.args),
@@ -48,17 +49,19 @@ pub mod rsh_loop {
         }
     }
 
-    fn rsh_launch(config: CommandConfig) -> Status {
+    fn rsh_launch(config: CommandConfig) -> Option<Status> {
         print_command(config);
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
-                println!("I'm parent. Child PID is {}", child);
+                // println!("I'm parent. Child PID is {}", child);
                 loop {
                     let waitresult = waitpid(child, Some(WaitPidFlag::WUNTRACED));
                     match waitresult.unwrap() {
-                        WaitStatus::Exited(..) | WaitStatus::Signaled(..) => break,
-                        _ => (),
+                        WaitStatus::Exited(..) | WaitStatus::Signaled(..) => {
+                            break Some(Status::Success)
+                        }
+                        _ => ()
                     }
                 }
             }
@@ -66,10 +69,12 @@ pub mod rsh_loop {
                 // child
                 println!("I'm child");
                 //do command
+                Some(Status::Exit)
             }
-            Err(_) => panic!("Fork failed",),
+            Err(_) => {
+                None
+            }
         }
-        Status::Success
     }
 
     fn print_command(config: CommandConfig) {
@@ -79,15 +84,18 @@ pub mod rsh_loop {
         );
     }
 
-    fn rsh_cd(args: Vec<&str>) -> Status {
-        assert!(args.len() > 0, "going to home directory just by `cd` is not supported for now");
-        Status::Success
+    fn rsh_cd(args: Vec<&str>) -> Option<Status> {
+        assert!(
+            args.len() > 0,
+            "going to home directory just by `cd` is not supported for now"
+        );
+        Some(Status::Success)
     }
 
-    fn rsh_help(args: Vec<&str>) -> Status {
-        Status::Success
+    fn rsh_help(args: Vec<&str>) -> Option<Status> {
+        Some(Status::Success)
     }
-    fn rsh_exit(args: Vec<&str>) -> Status {
-        Status::Success
+    fn rsh_exit(args: Vec<&str>) -> Option<Status> {
+        Some(Status::Success)
     }
 }

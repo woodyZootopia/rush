@@ -8,7 +8,10 @@ fn rsh_loop() {
         io::stdout().flush().unwrap(); // make sure above `> ` is printed
         let line = rsh_loop::rsh_read_line().unwrap();
         let args = rsh_loop::rsh_split_line(&line);
-        let status = rsh_loop::rsh_execute(args);
+        match rsh_loop::rsh_execute(args) {
+            Some(rsh_loop::Status::Exit) => break,
+            _ => (),
+        }
     }
 }
 
