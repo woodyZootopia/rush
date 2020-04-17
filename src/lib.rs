@@ -10,10 +10,10 @@ pub mod rsh_loop {
         pub args: Vec<&'a str>,
     }
 
-    pub fn rsh_read_line() -> Result<String, io::Error> {
+    pub fn rsh_read_line() -> String {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
-        return Ok(input);
+        return input;
     }
 
     pub fn rsh_split_line<'a>(line: &'a str) -> CommandConfig<'a> {
