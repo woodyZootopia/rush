@@ -3,16 +3,18 @@ extern crate nix;
 pub mod rsh {
     use nix::sys::wait::*;
     use nix::unistd::*;
+    use std::collections::HashMap;
     use std::io;
     use std::io::Write;
+    use std::ffi::OsString;
 
-    pub fn rsh_loop() {
+    pub fn rsh_loop(available_binaries: &HashMap<OsString,String>) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
             let line = rsh_read_line();
             let args = rsh_split_line(&line);
-            match rsh_execute(args) {
+            match rsh_execute(args, &available_binaries) {
                 Some(Status::Exit) => break,
                 _ => (),
             }
@@ -54,17 +56,17 @@ pub mod rsh {
         Exit,
     }
 
-    fn rsh_execute(config: CommandConfig) -> Option<Status> {
+    fn rsh_execute(config: CommandConfig, available_binaries: &HashMap<OsString,String>) -> Option<Status> {
         match config.command {
             Some("cd") => rsh_cd(config.args),
             Some("help") => rsh_help(config.args),
             Some("exit") => rsh_exit(config.args),
             Some("pwd") => rsh_pwd(config.args),
-            _ => rsh_launch(config),
+            _ => rsh_launch(config, &available_binaries),
         }
     }
 
-    fn rsh_launch(_config: CommandConfig) -> Option<Status> {
+    fn rsh_launch(_config: CommandConfig, available_binaries: &HashMap<OsString,String>) -> Option<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -102,7 +104,9 @@ pub mod rsh {
             args.len() > 0,
             "going to home directory just by `cd` is not supported for now"
         );
-        chdir(args[0]).map(|_| Status::Success).map_err(|err| println!("{}", err.to_string()));
+        chdir(args[0])
+            .map(|_| Status::Success)
+            .map_err(|err| println!("{}", err.to_string()));
         Some(Status::Success)
     }
 
