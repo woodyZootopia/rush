@@ -5,9 +5,9 @@ pub mod rsh_loop {
     use nix::unistd::*;
     use std::io;
 
-    pub struct CommandConfig {
-        pub command: String,
-        pub args: Vec<String>,
+    pub struct CommandConfig<'a> {
+        pub command: Option<&'a str>,
+        pub args: Vec<&'a str>,
     }
 
     pub fn rsh_read_line() -> Result<String, io::Error> {
@@ -16,18 +16,20 @@ pub mod rsh_loop {
         return Ok(input);
     }
 
-    pub fn rsh_split_line(line: String) -> CommandConfig {
+    pub fn rsh_split_line<'a>(line: &'a str) -> CommandConfig<'a> {
         let mut inputs = line.split_ascii_whitespace();
         if let Some(command) = inputs.next() {
-            let command = command.to_string();
             let mut args = Vec::new();
             while let Some(arg) = inputs.next() {
-                args.push(arg.to_string());
+                args.push(arg);
             }
-            CommandConfig { command, args }
+            CommandConfig {
+                command: Some(command),
+                args,
+            }
         } else {
             CommandConfig {
-                command: String::new(),
+                command: None,
                 args: Vec::new(),
             }
         }
@@ -38,6 +40,15 @@ pub mod rsh_loop {
     }
 
     pub fn rsh_execute(config: CommandConfig) -> Status {
+        match config.command {
+            Some("cd") => rsh_cd(config.args),
+            Some("help") => rsh_help(config.args),
+            Some("exit") => rsh_exit(config.args),
+            _ => rsh_launch(config),
+        }
+    }
+
+    fn rsh_launch(config: CommandConfig) -> Status {
         print_command(config);
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
@@ -63,8 +74,20 @@ pub mod rsh_loop {
 
     fn print_command(config: CommandConfig) {
         println!(
-            "Command is {},\n args are {:?}",
+            "Command is {:?},\n args are {:?}",
             config.command, config.args
         );
+    }
+
+    fn rsh_cd(args: Vec<&str>) -> Status {
+        assert!(args.len() > 0, "going to home directory just by `cd` is not supported for now");
+        Status::Success
+    }
+
+    fn rsh_help(args: Vec<&str>) -> Status {
+        Status::Success
+    }
+    fn rsh_exit(args: Vec<&str>) -> Status {
+        Status::Success
     }
 }
