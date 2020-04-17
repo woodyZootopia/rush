@@ -61,7 +61,7 @@ pub mod rsh_loop {
                         WaitStatus::Exited(..) | WaitStatus::Signaled(..) => {
                             break Some(Status::Success)
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
             }
@@ -71,9 +71,7 @@ pub mod rsh_loop {
                 //do command
                 Some(Status::Exit)
             }
-            Err(_) => {
-                None
-            }
+            Err(_) => None,
         }
     }
 
@@ -92,10 +90,13 @@ pub mod rsh_loop {
         Some(Status::Success)
     }
 
-    fn rsh_help(args: Vec<&str>) -> Option<Status> {
+    fn rsh_help(_args: Vec<&str>) -> Option<Status> {
+        println!("Woody's re-implemantation of lsh, written in Rust.",);
+        println!("Type command and arguments, and hit enter.",);
+        // println!("The following commands are built in:",);
         Some(Status::Success)
     }
-    fn rsh_exit(args: Vec<&str>) -> Option<Status> {
-        Some(Status::Success)
+    fn rsh_exit(_args: Vec<&str>) -> Option<Status> {
+        Some(Status::Exit)
     }
 }
