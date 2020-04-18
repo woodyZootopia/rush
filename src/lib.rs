@@ -4,11 +4,11 @@ pub mod rsh {
     use nix::sys::wait::*;
     use nix::unistd::*;
     use std::collections::HashMap;
+    use std::ffi::CString;
     use std::io;
     use std::io::Write;
-    use std::ffi::OsString;
 
-    pub fn rsh_loop(available_binaries: &HashMap<OsString,String>) {
+    pub fn rsh_loop(available_binaries: &HashMap<CString, CString>) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
@@ -56,7 +56,10 @@ pub mod rsh {
         Exit,
     }
 
-    fn rsh_execute(config: &CommandConfig, available_binaries: &HashMap<OsString,String>) -> Option<Status> {
+    fn rsh_execute(
+        config: &CommandConfig,
+        available_binaries: &HashMap<CString, CString>,
+    ) -> Option<Status> {
         match config.command {
             Some("cd") => rsh_cd(&config.args),
             Some("help") => rsh_help(&config.args),
@@ -66,7 +69,10 @@ pub mod rsh {
         }
     }
 
-    fn rsh_launch(_config: &CommandConfig, available_binaries: &HashMap<OsString,String>) -> Option<Status> {
+    fn rsh_launch(
+        _config: &CommandConfig,
+        available_binaries: &HashMap<CString, CString>,
+    ) -> Option<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -84,9 +90,16 @@ pub mod rsh {
             Ok(ForkResult::Child) => {
                 // child
                 println!("I'm child");
-                //do command
-                // execv();
-                Some(Status::Exit)
+                match _config.command {
+                    None => Some(Status::Exit),
+                    Some(command) => {
+                        // if let command_path = available_binaries.get(&CString::new(command)) {
+                        //     execv(command_path.unwrap(), &Cstring::new(_config.args));
+                        //     println!("{:?}", command_path);
+                        // }
+                        Some(Status::Exit)
+                    }
+                }
             }
             Err(_) => None,
         }
