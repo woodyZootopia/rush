@@ -23,7 +23,7 @@ pub mod rsh {
 
     struct CommandConfig<'a> {
         pub command: Option<&'a str>,
-        pub args: Vec<&'a str>,
+        pub args: Vec<CString>,
     }
 
     fn rsh_read_line() -> String {
@@ -37,11 +37,11 @@ pub mod rsh {
         if let Some(command) = inputs.next() {
             let mut args = Vec::new();
             while let Some(arg) = inputs.next() {
-                args.push(arg);
+                args.push(CString::new(arg).unwrap());
             }
             CommandConfig {
                 command: Some(command),
-                args,
+                args: args,
             }
         } else {
             CommandConfig {
@@ -70,7 +70,7 @@ pub mod rsh {
     }
 
     fn rsh_launch(
-        _config: &CommandConfig,
+        config: &CommandConfig,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {
         match fork() {
@@ -90,13 +90,15 @@ pub mod rsh {
             Ok(ForkResult::Child) => {
                 // child
                 println!("I'm child");
-                match _config.command {
+                match config.command {
                     None => Some(Status::Exit),
                     Some(command) => {
-                        // if let command_path = available_binaries.get(&CString::new(command)) {
-                        //     execv(command_path.unwrap(), &Cstring::new(_config.args));
-                        //     println!("{:?}", command_path);
-                        // }
+                        let command_path = available_binaries.get(&CString::new(command).unwrap());
+                        // config.args.iter().map(
+                        // CString::new).collect();
+                        // CString::new(config.args);
+                        // execv(command_path.unwrap(), &(&CString::new(config.args).unwrap().iter().map(AsRef::as_ref).collect()));
+                        println!("{:?}", command_path);
                         Some(Status::Exit)
                     }
                 }
@@ -112,29 +114,29 @@ pub mod rsh {
         );
     }
 
-    fn rsh_cd(args: &Vec<&str>) -> Option<Status> {
+    fn rsh_cd(args: &Vec<CString>) -> Option<Status> {
         assert!(
             args.len() > 0,
             "going to home directory just by `cd` is not supported for now"
         );
-        chdir(args[0])
+        chdir(args[0].as_c_str())
             .map(|_| Status::Success)
             .map_err(|err| println!("{}", err.to_string()));
         Some(Status::Success)
     }
 
-    fn rsh_help(_args: &Vec<&str>) -> Option<Status> {
+    fn rsh_help(_args: &Vec<CString>) -> Option<Status> {
         println!("Woody's re-implemantation of lsh, written in Rust.",);
         println!("Type command and arguments, and hit enter.",);
         // println!("The following commands are built in:",);
         Some(Status::Success)
     }
 
-    fn rsh_exit(_args: &Vec<&str>) -> Option<Status> {
+    fn rsh_exit(_args: &Vec<CString>) -> Option<Status> {
         Some(Status::Exit)
     }
 
-    fn rsh_pwd(_args: &Vec<&str>) -> Option<Status> {
+    fn rsh_pwd(_args: &Vec<CString>) -> Option<Status> {
         println!("{:?}", getcwd().unwrap());
         Some(Status::Success)
     }
