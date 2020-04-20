@@ -5,8 +5,9 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    let path = "/bin";
     let mut available_binaries = HashMap::<CString, CString>::new();
-    for entry in fs::read_dir(Path::new("/bin")).unwrap() {
+    for entry in fs::read_dir(Path::new(path)).unwrap() {
         //assign binaries
         let entry = entry.unwrap().path();
         let stem = entry.file_stem();
