@@ -4,7 +4,7 @@ pub mod rsh {
     use nix::sys::wait::*;
     use nix::unistd::*;
     use std::collections::HashMap;
-    use std::ffi::CString;
+    use std::ffi::{CStr, CString};
     use std::io;
     use std::io::Write;
 
@@ -89,16 +89,25 @@ pub mod rsh {
             }
             Ok(ForkResult::Child) => {
                 // child
-                println!("I'm child");
                 match config.command {
                     None => Some(Status::Exit),
                     Some(command) => {
                         let command_path = available_binaries.get(&CString::new(command).unwrap());
-                        // config.args.iter().map(
-                        // CString::new).collect();
-                        // CString::new(config.args);
-                        // execv(command_path.unwrap(), &(&CString::new(config.args).unwrap().iter().map(AsRef::as_ref).collect()));
-                        println!("{:?}", command_path);
+                        if config.args.len() == 0 {
+                            execv(
+                                command_path.expect(&format!("Command not found:{}", command)[..]),
+                                &[CString::new("").unwrap().as_c_str()],
+                            );
+                        } else {
+                            execv(
+                                command_path.expect(&format!("Command not found:{}", command)[..]),
+                                &config.args[..]
+                                    .iter()
+                                    .map(AsRef::as_ref)
+                                    .collect::<Vec<&CStr>>()
+                                    .as_ref(),
+                            );
+                        }
                         Some(Status::Exit)
                     }
                 }
