@@ -92,15 +92,15 @@ pub mod rsh {
                 match config.command {
                     None => Some(Status::Exit),
                     Some(command) => {
-                        let command_path = available_binaries.get(&CString::new(command).unwrap());
+                        let command_path = available_binaries
+                            .get(&CString::new(command).unwrap())
+                            .expect(&format!("Command not found: {}", command)[..]);
+
                         if config.args.len() == 0 {
-                            execv(
-                                command_path.expect(&format!("Command not found:{}", command)[..]),
-                                &[CString::new("").unwrap().as_c_str()],
-                            );
+                            execv(command_path, &[CString::new("").unwrap().as_c_str()]);
                         } else {
                             execv(
-                                command_path.expect(&format!("Command not found:{}", command)[..]),
+                                command_path,
                                 &config.args[..]
                                     .iter()
                                     .map(AsRef::as_ref)
