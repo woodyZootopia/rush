@@ -65,6 +65,7 @@ pub mod rsh {
             Some("help") => rsh_help(&config.args),
             Some("exit") => rsh_exit(&config.args),
             Some("pwd") => rsh_pwd(&config.args),
+            Some("which") => rsh_which(&config.args, &available_binaries),
             _ => rsh_launch(config, &available_binaries),
         }
     }
@@ -147,6 +148,18 @@ pub mod rsh {
 
     fn rsh_pwd(_args: &Vec<CString>) -> Option<Status> {
         println!("{:?}", getcwd().unwrap());
+        Some(Status::Success)
+    }
+
+    fn rsh_which(
+        args: &Vec<CString>,
+        available_binaries: &HashMap<CString, CString>,
+    ) -> Option<Status> {
+        match available_binaries.get(&args[0]) {
+            // Some(command) => println!("{}", command),
+            Some(command) => println!("{:?}", command),
+            None => println!("Command {:?} not found.", args[0]),
+        }
         Some(Status::Success)
     }
 }
