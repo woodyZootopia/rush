@@ -8,13 +8,17 @@ fn main() {
     let path = "/bin";
     let mut available_binaries = HashMap::<CString, CString>::new();
     for entry in fs::read_dir(Path::new(path)).unwrap() {
-        //assign binaries
-        let entry = entry.unwrap().path();
-        let stem = entry.file_stem().unwrap();
-        let stem_string = stem.to_os_string().into_string().unwrap();
+        // assign binaries
+        let entry_path = entry.unwrap().path();
+        let stem_string = entry_path
+            .file_stem()
+            .unwrap()
+            .to_os_string()
+            .into_string()
+            .unwrap();
         available_binaries.insert(
             CString::new(stem_string).unwrap(),
-            CString::new(entry.to_str().unwrap()).unwrap(),
+            CString::new(entry_path.to_str().unwrap()).unwrap(),
         );
     }
     rush::rsh_loop(&available_binaries);
