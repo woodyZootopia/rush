@@ -1,4 +1,4 @@
-use rust_shell::rsh;
+use rust_shell::rush;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
@@ -17,5 +17,5 @@ fn main() {
             CString::new(entry.to_str().unwrap()).unwrap(),
         );
     }
-    rsh::rsh_loop(&available_binaries);
+    rush::rsh_loop(&available_binaries);
 }

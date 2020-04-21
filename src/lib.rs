@@ -1,6 +1,6 @@
 extern crate nix;
 
-pub mod rsh {
+pub mod rush {
     use nix::sys::wait::*;
     use nix::unistd::*;
     use std::collections::HashMap;
