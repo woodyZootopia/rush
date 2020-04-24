@@ -13,7 +13,7 @@ pub mod rush {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
             let line = read_line();
-            let configs = split_line(&line);
+            let configs = split_to_commands(&line);
             let config = &configs[0];
             match execute(&config, &available_binaries) {
                 Some(Status::Exit) => break,
@@ -33,23 +33,29 @@ pub mod rush {
         return input;
     }
 
-    fn split_line<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
+    fn split_to_commands<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
         let mut inputs = line.split_ascii_whitespace();
-        if let Some(command) = inputs.next() {
+        let mut vec_of_commands = Vec::new();
+        while let Some(command) = inputs.next() {
+            let mut pipe_found = false;
             let mut args = Vec::new();
             while let Some(arg) = inputs.next() {
-                args.push(CString::new(arg).unwrap());
+                if arg != "|" {
+                    args.push(CString::new(arg).unwrap());
+                } else {
+                    pipe_found = true;
+                    break;
+                }
             }
-            vec![CommandConfig {
+            vec_of_commands.push(CommandConfig {
                 command: Some(command),
                 args: args,
-            }]
-        } else {
-            vec![CommandConfig {
-                command: None,
-                args: Vec::new(),
-            }]
+            });
+            if !pipe_found {
+                break;
+            }
         }
+        vec_of_commands
     }
 
     enum Status {
@@ -108,7 +114,8 @@ pub mod rush {
                                     .map(AsRef::as_ref)
                                     .collect::<Vec<&CStr>>()
                                     .as_ref(),
-                            ).unwrap();
+                            )
+                            .unwrap();
                         }
                         Some(Status::Exit)
                     }
@@ -132,7 +139,8 @@ pub mod rush {
         );
         chdir(args[0].as_c_str())
             .map(|_| Status::Success)
-            .map_err(|err| println!("{}", err.to_string())).unwrap();
+            .map_err(|err| println!("{}", err.to_string()))
+            .unwrap();
         Some(Status::Success)
     }
 
