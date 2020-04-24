@@ -98,7 +98,7 @@ pub mod rush {
                             .expect(&format!("Command not found: {}", command)[..]);
 
                         if config.args.len() == 0 {
-                            execv(command_path, &[CString::new("").unwrap().as_c_str()]);
+                            execv(command_path, &[CString::new("").unwrap().as_c_str()]).unwrap();
                         } else {
                             execv(
                                 command_path,
@@ -107,7 +107,7 @@ pub mod rush {
                                     .map(AsRef::as_ref)
                                     .collect::<Vec<&CStr>>()
                                     .as_ref(),
-                            );
+                            ).unwrap();
                         }
                         Some(Status::Exit)
                     }
@@ -131,7 +131,7 @@ pub mod rush {
         );
         chdir(args[0].as_c_str())
             .map(|_| Status::Success)
-            .map_err(|err| println!("{}", err.to_string()));
+            .map_err(|err| println!("{}", err.to_string())).unwrap();
         Some(Status::Success)
     }
 
