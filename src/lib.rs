@@ -14,8 +14,7 @@ pub mod rush {
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
             let line = read_line();
             let configs = split_to_commands(&line);
-            let config = &configs[0];
-            match execute(&config, &available_binaries) {
+            match execute(configs, &available_binaries) {
                 Some(Status::Exit) => break,
                 _ => (),
             }
@@ -64,17 +63,21 @@ pub mod rush {
     }
 
     fn execute(
-        config: &CommandConfig,
+        configs: Vec<CommandConfig>,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {
-        match config.command {
-            Some("cd") => rsh_cd(&config.args),
-            Some("help") => rsh_help(&config.args),
-            Some("exit") => rsh_exit(&config.args),
-            Some("pwd") => rsh_pwd(&config.args),
-            Some("which") => rsh_which(&config.args, &available_binaries),
-            _ => rsh_launch(config, &available_binaries),
+        let mut result=None;
+        for config in configs {
+            result = match config.command {
+                Some("cd") => rsh_cd(&config.args),
+                Some("help") => rsh_help(&config.args),
+                Some("exit") => rsh_exit(&config.args),
+                Some("pwd") => rsh_pwd(&config.args),
+                Some("which") => rsh_which(&config.args, &available_binaries),
+                _ => rsh_launch(&config, &available_binaries),
+            };
         }
+        result
     }
 
     fn rsh_launch(
