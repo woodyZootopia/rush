@@ -37,7 +37,7 @@ pub mod rush {
         let mut vec_of_commands = Vec::new();
         while let Some(command) = inputs.next() {
             let mut pipe_found = false;
-            let mut args = Vec::new();
+            let mut args = vec![CString::new(command).unwrap()];
             while let Some(arg) = inputs.next() {
                 if arg != "|" {
                     args.push(CString::new(arg).unwrap());
@@ -66,7 +66,7 @@ pub mod rush {
         configs: Vec<CommandConfig>,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {
-        let mut result=None;
+        let mut result = None;
         for config in configs {
             result = match config.command {
                 Some("cd") => rsh_cd(&config.args),
@@ -140,7 +140,7 @@ pub mod rush {
             args.len() > 0,
             "going to home directory just by `cd` is not supported for now"
         );
-        chdir(args[0].as_c_str())
+        chdir(args[1].as_c_str())
             .map(|_| Status::Success)
             .map_err(|err| println!("{}", err.to_string()))
             .unwrap();
@@ -167,10 +167,10 @@ pub mod rush {
         args: &Vec<CString>,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {
-        match available_binaries.get(&args[0]) {
+        match available_binaries.get(&args[1]) {
             // Some(command) => println!("{}", command),
             Some(command) => println!("{:?}", command),
-            None => println!("Command {:?} not found.", args[0]),
+            None => println!("Command {:?} not found.", args[1]),
         }
         Some(Status::Success)
     }
