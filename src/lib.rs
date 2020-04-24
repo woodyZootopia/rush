@@ -8,14 +8,14 @@ pub mod rush {
     use std::io;
     use std::io::Write;
 
-    pub fn rsh_loop(available_binaries: &HashMap<CString, CString>) {
+    pub fn main_loop(available_binaries: &HashMap<CString, CString>) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
-            let line = rsh_read_line();
-            let configs = rsh_split_line(&line);
+            let line = read_line();
+            let configs = split_line(&line);
             let config = &configs[0];
-            match rsh_execute(&config, &available_binaries) {
+            match execute(&config, &available_binaries) {
                 Some(Status::Exit) => break,
                 _ => (),
             }
@@ -27,13 +27,13 @@ pub mod rush {
         pub args: Vec<CString>,
     }
 
-    fn rsh_read_line() -> String {
+    fn read_line() -> String {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
         return input;
     }
 
-    fn rsh_split_line<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
+    fn split_line<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
         let mut inputs = line.split_ascii_whitespace();
         if let Some(command) = inputs.next() {
             let mut args = Vec::new();
@@ -57,7 +57,7 @@ pub mod rush {
         Exit,
     }
 
-    fn rsh_execute(
+    fn execute(
         config: &CommandConfig,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {

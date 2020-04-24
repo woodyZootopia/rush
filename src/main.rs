@@ -21,5 +21,5 @@ fn main() {
             CString::new(entry_path.to_str().unwrap()).unwrap(),
         );
     }
-    rush::rsh_loop(&available_binaries);
+    rush::main_loop(&available_binaries);
 }
