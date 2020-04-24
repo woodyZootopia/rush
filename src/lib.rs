@@ -13,7 +13,8 @@ pub mod rush {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure above `> ` is printed
             let line = rsh_read_line();
-            let config = rsh_split_line(&line);
+            let configs = rsh_split_line(&line);
+            let config = &configs[0];
             match rsh_execute(&config, &available_binaries) {
                 Some(Status::Exit) => break,
                 _ => (),
@@ -32,22 +33,22 @@ pub mod rush {
         return input;
     }
 
-    fn rsh_split_line<'a>(line: &'a str) -> CommandConfig<'a> {
+    fn rsh_split_line<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
         let mut inputs = line.split_ascii_whitespace();
         if let Some(command) = inputs.next() {
             let mut args = Vec::new();
             while let Some(arg) = inputs.next() {
                 args.push(CString::new(arg).unwrap());
             }
-            CommandConfig {
+            vec![CommandConfig {
                 command: Some(command),
                 args: args,
-            }
+            }]
         } else {
-            CommandConfig {
+            vec![CommandConfig {
                 command: None,
                 args: Vec::new(),
-            }
+            }]
         }
     }
 
