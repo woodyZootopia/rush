@@ -11,10 +11,10 @@ pub mod rush {
     pub fn main_loop(available_binaries: &HashMap<CString, CString>) {
         loop {
             print!("> ");
-            io::stdout().flush().unwrap(); // make sure above `> ` is printed
+            io::stdout().flush().unwrap(); // make sure "> " above is printed
             let line = read_line();
-            let configs = split_to_commands(&line);
-            match execute(configs, &available_binaries) {
+            let command_configs = split_to_commands(&line);
+            match execute(command_configs, &available_binaries) {
                 Some(Status::Exit) => break,
                 _ => (),
             }
@@ -48,7 +48,7 @@ pub mod rush {
             }
             vec_of_commands.push(CommandConfig {
                 command: Some(command),
-                args: args,
+                args,
             });
             if !pipe_found {
                 break;
@@ -63,18 +63,18 @@ pub mod rush {
     }
 
     fn execute(
-        configs: Vec<CommandConfig>,
+        command_configs: Vec<CommandConfig>,
         available_binaries: &HashMap<CString, CString>,
     ) -> Option<Status> {
         let mut result = None;
-        for config in configs {
-            result = match config.command {
-                Some("cd") => rsh_cd(&config.args),
-                Some("help") => rsh_help(&config.args),
-                Some("exit") => rsh_exit(&config.args),
-                Some("pwd") => rsh_pwd(&config.args),
-                Some("which") => rsh_which(&config.args, &available_binaries),
-                _ => rsh_launch(&config, &available_binaries),
+        for command_config in command_configs {
+            result = match command_config.command {
+                Some("cd") => rsh_cd(&command_config.args),
+                Some("help") => rsh_help(&command_config.args),
+                Some("exit") => rsh_exit(&command_config.args),
+                Some("pwd") => rsh_pwd(&command_config.args),
+                Some("which") => rsh_which(&command_config.args, &available_binaries),
+                _ => rsh_launch(&command_config, &available_binaries),
             };
         }
         result
