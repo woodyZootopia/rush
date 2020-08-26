@@ -5,8 +5,10 @@ pub mod rush {
     use nix::unistd::*;
     use std::collections::HashMap;
     use std::ffi::{CStr, CString};
+    use std::fs;
     use std::io;
     use std::io::Write;
+    use std::path::{Path, PathBuf};
 
     pub fn main_loop(env_vars: &[&CStr]) {
         loop {
@@ -84,7 +86,7 @@ pub mod rush {
                 "help" => rsh_help(&command_config.argv),
                 "exit" => rsh_exit(&command_config.argv),
                 "pwd" => rsh_pwd(&command_config.argv),
-                // Some("which") => rsh_which(&command_config.args, &available_binaries),
+                "which" => rsh_which(&command_config.argv, &env_map),
                 _ => {
                     let result = rsh_launch(&command_config, env_vars);
                     match result {
@@ -186,15 +188,35 @@ pub mod rush {
         Ok(Status::Success)
     }
 
-    fn rsh_which(
-        args: &Vec<CString>,
-        available_binaries: &HashMap<CString, CString>,
-    ) -> Option<Status> {
-        match available_binaries.get(&args[1]) {
-            // Some(command) => println!("{}", command),
+    fn rsh_which(argv: &Vec<CString>, env_map: &HashMap<CString, CString>) -> Result<Status, ()> {
+        let paths = &(env_map
+            .get(&CString::new("PATH").unwrap())
+            .expect("PATH is not specified in the env!"))
+        .to_str()
+        .unwrap()
+        .split(":")
+        .collect::<Vec<&str>>();
+        let available_binaries = find_files_in(paths);
+        match available_binaries.get(&argv[1]) {
             Some(command) => println!("{:?}", command),
-            None => println!("Command {:?} not found.", args[1]),
+            None => println!("Command {:?} not found.", argv[1]),
         }
-        Some(Status::Success)
+        Ok(Status::Success)
+    }
+
+    fn find_files_in(paths: &Vec<&str>) -> HashMap<CString, PathBuf> {
+        let mut found_files = HashMap::new();
+        for path in paths {
+            for entry in fs::read_dir(Path::new(path)).expect(&format!("path {} not found!", path))
+            {
+                let path = entry.unwrap().path();
+                let file_name = path.file_name().unwrap();
+                found_files.insert(
+                    CString::new(file_name.to_str().unwrap().to_owned()).unwrap(),
+                    path,
+                );
+            }
+        }
+        found_files
     }
 }
