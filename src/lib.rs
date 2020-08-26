@@ -8,13 +8,13 @@ pub mod rush {
     use std::io;
     use std::io::Write;
 
-    pub fn main_loop(env_path: &[&CStr]) {
+    pub fn main_loop(env_vars: &[&CStr]) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure "> " above is printed
             let line = read_line();
             let command_configs = split_to_commands(&line);
-            match execute(command_configs, env_path) {
+            match execute(command_configs, env_vars) {
                 Ok(Status::Exit) => break,
                 _ => (),
             }
@@ -63,7 +63,7 @@ pub mod rush {
         Exit,
     }
 
-    fn execute(command_configs: Vec<CommandConfig>, env_path: &[&CStr]) -> Result<Status, ()> {
+    fn execute(command_configs: Vec<CommandConfig>, env_vars: &[&CStr]) -> Result<Status, ()> {
         let mut result = Err(());
         for command_config in command_configs {
             result = match command_config.command.to_str().unwrap() {
@@ -73,7 +73,7 @@ pub mod rush {
                 "pwd" => rsh_pwd(&command_config.argv),
                 // Some("which") => rsh_which(&command_config.args, &available_binaries),
                 _ => {
-                    let result = rsh_launch(&command_config, env_path);
+                    let result = rsh_launch(&command_config, env_vars);
                     match result {
                         Ok(status) => Ok(status),
                         Err(err) => {
@@ -89,7 +89,7 @@ pub mod rush {
 
     fn rsh_launch(
         command_configs: &CommandConfig,
-        env_path: &[&CStr],
+        env_vars: &[&CStr],
     ) -> Result<Status, nix::Error> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
@@ -108,7 +108,7 @@ pub mod rush {
             Ok(ForkResult::Child) => {
                 // child
                 if command_configs.argv.len() == 0 {
-                    execvpe(&command_configs.command, &[], env_path)?;
+                    execvpe(&command_configs.command, &[], env_vars)?;
                 } else {
                     execvpe(
                         &command_configs.command,
@@ -117,7 +117,7 @@ pub mod rush {
                             .map(AsRef::as_ref)
                             .collect::<Vec<&CStr>>()
                             .as_ref(),
-                        env_path,
+                        env_vars,
                     )?;
                 }
                 Ok(Status::Exit)
