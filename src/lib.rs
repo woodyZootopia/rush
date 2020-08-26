@@ -15,7 +15,7 @@ pub mod rush {
             let line = read_line();
             let command_configs = split_to_commands(&line);
             match execute(command_configs, env_path) {
-                Some(Status::Exit) => break,
+                Ok(Status::Exit) => break,
                 _ => (),
             }
         }
@@ -63,8 +63,8 @@ pub mod rush {
         Exit,
     }
 
-    fn execute(command_configs: Vec<CommandConfig>, env_path: &[&CStr]) -> Option<Status> {
-        let mut result = None;
+    fn execute(command_configs: Vec<CommandConfig>, env_path: &[&CStr]) -> Result<Status, ()> {
+        let mut result = Err(());
         for command_config in command_configs {
             result = match command_config.command.to_str().unwrap() {
                 "cd" => rsh_cd(&command_config.argv),
@@ -72,13 +72,25 @@ pub mod rush {
                 "exit" => rsh_exit(&command_config.argv),
                 "pwd" => rsh_pwd(&command_config.argv),
                 // Some("which") => rsh_which(&command_config.args, &available_binaries),
-                _ => rsh_launch(&command_config, env_path),
+                _ => {
+                    let result = rsh_launch(&command_config, env_path);
+                    match result {
+                        Ok(status) => Ok(status),
+                        Err(err) => {
+                            println!("{:?}", err);
+                            Err(())
+                        }
+                    }
+                }
             };
         }
         result
     }
 
-    fn rsh_launch(command_configs: &CommandConfig, env_path: &[&CStr]) -> Option<Status> {
+    fn rsh_launch(
+        command_configs: &CommandConfig,
+        env_path: &[&CStr],
+    ) -> Result<Status, nix::Error> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -87,7 +99,7 @@ pub mod rush {
                     let waitresult = waitpid(child, Some(WaitPidFlag::WUNTRACED));
                     match waitresult.unwrap() {
                         WaitStatus::Exited(..) | WaitStatus::Signaled(..) => {
-                            break Some(Status::Success)
+                            break Ok(Status::Success)
                         }
                         _ => (),
                     }
@@ -96,7 +108,7 @@ pub mod rush {
             Ok(ForkResult::Child) => {
                 // child
                 if command_configs.argv.len() == 0 {
-                    execvpe(&command_configs.command, &[], env_path).unwrap();
+                    execvpe(&command_configs.command, &[], env_path)?;
                 } else {
                     execvpe(
                         &command_configs.command,
@@ -106,12 +118,11 @@ pub mod rush {
                             .collect::<Vec<&CStr>>()
                             .as_ref(),
                         env_path,
-                    )
-                    .unwrap();
+                    )?;
                 }
-                Some(Status::Exit)
+                Ok(Status::Exit)
             }
-            Err(_) => None,
+            Err(err) => Err(err),
         }
     }
 
@@ -122,32 +133,31 @@ pub mod rush {
         );
     }
 
-    fn rsh_cd(args: &Vec<CString>) -> Option<Status> {
+    fn rsh_cd(args: &Vec<CString>) -> Result<Status, ()> {
         assert!(
             args.len() > 1,
             "going to home directory just by `cd` is not supported for now"
         );
         chdir(args[1].as_c_str())
             .map(|_| Status::Success)
-            .map_err(|err| println!("{}", err.to_string()))
-            .unwrap();
-        Some(Status::Success)
+            .map_err(|err| println!("{}", err.to_string()))?;
+        Ok(Status::Success)
     }
 
-    fn rsh_help(_args: &Vec<CString>) -> Option<Status> {
+    fn rsh_help(_args: &Vec<CString>) -> Result<Status, ()> {
         println!("Woody's re-implemantation of lsh, written in Rust.",);
         println!("Type command and arguments, and hit enter.",);
         // println!("The following commands are built in:",);
-        Some(Status::Success)
+        Ok(Status::Success)
     }
 
-    fn rsh_exit(_args: &Vec<CString>) -> Option<Status> {
-        Some(Status::Exit)
+    fn rsh_exit(_args: &Vec<CString>) -> Result<Status, ()> {
+        Ok(Status::Exit)
     }
 
-    fn rsh_pwd(_args: &Vec<CString>) -> Option<Status> {
+    fn rsh_pwd(_args: &Vec<CString>) -> Result<Status, ()> {
         println!("{:?}", getcwd().unwrap());
-        Some(Status::Success)
+        Ok(Status::Success)
     }
 
     fn rsh_which(
