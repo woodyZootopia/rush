@@ -8,22 +8,23 @@ pub mod rush {
     use std::io;
     use std::io::Write;
 
-    pub fn main_loop(available_binaries: &HashMap<CString, CString>) {
+    pub fn main_loop(env_path: &[&CStr]) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure "> " above is printed
             let line = read_line();
             let command_configs = split_to_commands(&line);
-            match execute(command_configs, &available_binaries) {
+            match execute(command_configs, env_path) {
                 Some(Status::Exit) => break,
                 _ => (),
             }
         }
     }
 
-    struct CommandConfig<'a> {
-        pub command: Option<&'a str>,
-        pub args: Vec<CString>,
+    #[derive(Debug)]
+    struct CommandConfig {
+        pub command: CString,
+        pub argv: Vec<CString>,
     }
 
     fn read_line() -> String {
@@ -32,23 +33,23 @@ pub mod rush {
         return input;
     }
 
-    fn split_to_commands<'a>(line: &'a str) -> Vec<CommandConfig<'a>> {
-        let mut inputs = line.split_ascii_whitespace();
+    fn split_to_commands<'a>(line: &'a str) -> Vec<CommandConfig> {
         let mut vec_of_commands = Vec::new();
+        let mut inputs = line.split_ascii_whitespace();
         while let Some(command) = inputs.next() {
             let mut pipe_found = false;
-            let mut args = vec![CString::new(command).unwrap()];
+            let mut argv = vec![CString::new(command).unwrap()];
             while let Some(arg) = inputs.next() {
                 if arg != "|" {
-                    args.push(CString::new(arg).unwrap());
+                    argv.push(CString::new(arg).unwrap());
                 } else {
                     pipe_found = true;
                     break;
                 }
             }
             vec_of_commands.push(CommandConfig {
-                command: Some(command),
-                args,
+                command: CString::new(command).unwrap(),
+                argv,
             });
             if !pipe_found {
                 break;
@@ -62,28 +63,22 @@ pub mod rush {
         Exit,
     }
 
-    fn execute(
-        command_configs: Vec<CommandConfig>,
-        available_binaries: &HashMap<CString, CString>,
-    ) -> Option<Status> {
+    fn execute(command_configs: Vec<CommandConfig>, env_path: &[&CStr]) -> Option<Status> {
         let mut result = None;
         for command_config in command_configs {
-            result = match command_config.command {
-                Some("cd") => rsh_cd(&command_config.args),
-                Some("help") => rsh_help(&command_config.args),
-                Some("exit") => rsh_exit(&command_config.args),
-                Some("pwd") => rsh_pwd(&command_config.args),
-                Some("which") => rsh_which(&command_config.args, &available_binaries),
-                _ => rsh_launch(&command_config, &available_binaries),
+            result = match command_config.command.to_str().unwrap() {
+                "cd" => rsh_cd(&command_config.argv),
+                "help" => rsh_help(&command_config.argv),
+                "exit" => rsh_exit(&command_config.argv),
+                "pwd" => rsh_pwd(&command_config.argv),
+                // Some("which") => rsh_which(&command_config.args, &available_binaries),
+                _ => rsh_launch(&command_config, env_path),
             };
         }
         result
     }
 
-    fn rsh_launch(
-        config: &CommandConfig,
-        available_binaries: &HashMap<CString, CString>,
-    ) -> Option<Status> {
+    fn rsh_launch(command_configs: &CommandConfig, env_path: &[&CStr]) -> Option<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -100,29 +95,21 @@ pub mod rush {
             }
             Ok(ForkResult::Child) => {
                 // child
-                match config.command {
-                    None => Some(Status::Exit),
-                    Some(command) => {
-                        let command_path = available_binaries
-                            .get(&CString::new(command).unwrap())
-                            .expect(&format!("Command not found: {}", command)[..]);
-
-                        if config.args.len() == 0 {
-                            execv(command_path, &[CString::new("").unwrap().as_c_str()]).unwrap();
-                        } else {
-                            execv(
-                                command_path,
-                                &config.args[..]
-                                    .iter()
-                                    .map(AsRef::as_ref)
-                                    .collect::<Vec<&CStr>>()
-                                    .as_ref(),
-                            )
-                            .unwrap();
-                        }
-                        Some(Status::Exit)
-                    }
+                if command_configs.argv.len() == 0 {
+                    execvpe(&command_configs.command, &[], env_path).unwrap();
+                } else {
+                    execvpe(
+                        &command_configs.command,
+                        &command_configs.argv[..]
+                            .iter()
+                            .map(AsRef::as_ref)
+                            .collect::<Vec<&CStr>>()
+                            .as_ref(),
+                        env_path,
+                    )
+                    .unwrap();
                 }
+                Some(Status::Exit)
             }
             Err(_) => None,
         }
@@ -131,13 +118,13 @@ pub mod rush {
     fn print_command(config: CommandConfig) {
         println!(
             "Command is {:?},\n args are {:?}",
-            config.command, config.args
+            config.command, config.argv
         );
     }
 
     fn rsh_cd(args: &Vec<CString>) -> Option<Status> {
         assert!(
-            args.len() > 0,
+            args.len() > 1,
             "going to home directory just by `cd` is not supported for now"
         );
         chdir(args[1].as_c_str())
