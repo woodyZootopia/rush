@@ -1,8 +1,6 @@
-use rust_shell::rush;
-use std::collections::HashMap;
+mod lib;
+use crate::lib::rush;
 use std::ffi::CString;
-use std::fs;
-use std::path::Path;
 
 fn main() {
     let env_path = CString::new("PATH=/bin:/usr/bin").unwrap();
