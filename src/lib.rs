@@ -63,11 +63,24 @@ pub mod rush {
         Exit,
     }
 
+    fn obtain_env_val_map(env_vars: &[&CStr]) -> HashMap<CString, CString> {
+        let mut env_map = HashMap::new();
+        for env_var in env_vars.iter() {
+            let mut items = env_var.to_str().unwrap().splitn(2, "=");
+            env_map.insert(
+                CString::new(items.next().unwrap()).unwrap(),
+                CString::new(items.next().unwrap()).unwrap(),
+            );
+        }
+        env_map
+    }
+
     fn execute(command_configs: Vec<CommandConfig>, env_vars: &[&CStr]) -> Result<Status, ()> {
+        let env_map = obtain_env_val_map(env_vars);
         let mut result = Err(());
         for command_config in command_configs {
             result = match command_config.command.to_str().unwrap() {
-                "cd" => rsh_cd(&command_config.argv),
+                "cd" => rsh_cd(&command_config.argv, &env_map),
                 "help" => rsh_help(&command_config.argv),
                 "exit" => rsh_exit(&command_config.argv),
                 "pwd" => rsh_pwd(&command_config.argv),
@@ -137,14 +150,23 @@ pub mod rush {
         );
     }
 
-    fn rsh_cd(args: &Vec<CString>) -> Result<Status, ()> {
-        assert!(
-            args.len() > 1,
-            "going to home directory just by `cd` is not supported for now"
-        );
-        chdir(args[1].as_c_str())
+    fn rsh_cd(args: &Vec<CString>, env_map: &HashMap<CString, CString>) -> Result<Status, ()> {
+        if args.len() > 1 {
+            chdir(args[1].as_c_str())
+                .map(|_| Status::Success)
+                .map_err(|err| println!("{}", err.to_string()))?;
+        } else {
+            chdir(
+                env_map
+                    .get(&CString::new("HOME").unwrap())
+                    .expect(
+                        "You used cd without arguments, but HOME is not specified in the envpath!",
+                    )
+                    .as_c_str(),
+            )
             .map(|_| Status::Success)
             .map_err(|err| println!("{}", err.to_string()))?;
+        }
         Ok(Status::Success)
     }
 
