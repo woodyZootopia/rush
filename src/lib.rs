@@ -76,8 +76,12 @@ pub mod rush {
                     let result = rsh_launch(&command_config, env_vars);
                     match result {
                         Ok(status) => Ok(status),
-                        Err(err) => {
-                            println!("{:?}", err);
+                        Err(nix::Error::Sys(errorno)) => {
+                            println!("rsh: {:?}: {}", command_config.command, errorno.desc());
+                            Err(())
+                        }
+                        Err(error_type) => {
+                            println!("{:?}", error_type);
                             Err(())
                         }
                     }
