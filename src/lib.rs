@@ -2,6 +2,7 @@ extern crate anyhow;
 extern crate nix;
 
 pub mod rush {
+    use anyhow::Context;
     use nix::sys::wait::*;
     use nix::unistd::*;
     use std::collections::HashMap;
@@ -129,19 +130,16 @@ pub mod rush {
             }
             Ok(ForkResult::Child) => {
                 // child
-                if command_configs.argv.len() == 0 {
-                    execvpe(&command_configs.command, &[], env_vars)?;
-                } else {
-                    execvpe(
-                        &command_configs.command,
-                        &command_configs.argv[..]
-                            .iter()
-                            .map(AsRef::as_ref)
-                            .collect::<Vec<&CStr>>()
-                            .as_ref(),
-                        env_vars,
-                    )?;
-                }
+                execvpe(
+                    &command_configs.command,
+                    &command_configs.argv[..]
+                        .iter()
+                        .map(AsRef::as_ref)
+                        .collect::<Vec<&CStr>>()
+                        .as_ref(),
+                    env_vars,
+                )
+                .with_context(|| format!("{:?}: command not found", command_configs.command))?;
                 Ok(Status::Exit)
             }
             Err(err) => Err(err.into()),
