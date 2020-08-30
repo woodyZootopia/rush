@@ -1,3 +1,4 @@
+extern crate anyhow;
 extern crate nix;
 
 pub mod rush {
@@ -40,10 +41,13 @@ pub mod rush {
         let mut inputs = line.split_ascii_whitespace();
         while let Some(command) = inputs.next() {
             let mut pipe_found = false;
-            let mut argv = vec![CString::new(command).unwrap()];
+            let mut argv =
+                vec![CString::new(command).expect("Failed to convert your command to CString")];
             while let Some(arg) = inputs.next() {
                 if arg != "|" {
-                    argv.push(CString::new(arg).unwrap());
+                    argv.push(
+                        CString::new(arg).expect("Failed to convert your arguments to CString"),
+                    );
                 } else {
                     pipe_found = true;
                     break;
@@ -68,18 +72,24 @@ pub mod rush {
     fn obtain_env_val_map(env_vars: &[&CStr]) -> HashMap<CString, CString> {
         let mut env_map = HashMap::new();
         for env_var in env_vars.iter() {
-            let mut items = env_var.to_str().unwrap().splitn(2, "=");
+            let mut items = env_var
+                .to_str()
+                .expect("Failed to convert your environment variable to string")
+                .splitn(2, "=");
             env_map.insert(
-                CString::new(items.next().unwrap()).unwrap(),
-                CString::new(items.next().unwrap()).unwrap(),
+                CString::new(items.next().unwrap())
+                    .expect("Unknown error when parsing your envvar. Isn't it empty?"),
+                CString::new(items.next().unwrap())
+                    .expect("Error when parsing your envvar. Are you sure it contains '='?"),
             );
         }
         env_map
     }
 
-    fn execute(command_configs: Vec<CommandConfig>, env_vars: &[&CStr]) -> Result<Status, ()> {
+    fn execute(command_configs: Vec<CommandConfig>, env_vars: &[&CStr]) -> anyhow::Result<Status> {
         let env_map = obtain_env_val_map(env_vars);
-        let mut result = Err(());
+        let mut result: anyhow::Result<Status> =
+            Err(anyhow::Error::new(nix::Error::UnsupportedOperation));
         for command_config in command_configs {
             result = match command_config.command.to_str().unwrap() {
                 "cd" => rsh_cd(&command_config.argv, &env_map),
@@ -91,13 +101,9 @@ pub mod rush {
                     let result = rsh_launch(&command_config, env_vars);
                     match result {
                         Ok(status) => Ok(status),
-                        Err(nix::Error::Sys(errorno)) => {
-                            println!("rsh: {:?}: {}", command_config.command, errorno.desc());
-                            Err(())
-                        }
                         Err(error_type) => {
                             println!("{:?}", error_type);
-                            Err(())
+                            Err(error_type)
                         }
                     }
                 }
@@ -106,10 +112,7 @@ pub mod rush {
         result
     }
 
-    fn rsh_launch(
-        command_configs: &CommandConfig,
-        env_vars: &[&CStr],
-    ) -> Result<Status, nix::Error> {
+    fn rsh_launch(command_configs: &CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -141,7 +144,7 @@ pub mod rush {
                 }
                 Ok(Status::Exit)
             }
-            Err(err) => Err(err),
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -152,43 +155,41 @@ pub mod rush {
         );
     }
 
-    fn rsh_cd(args: &Vec<CString>, env_map: &HashMap<CString, CString>) -> Result<Status, ()> {
+    fn rsh_cd(args: &Vec<CString>, env_map: &HashMap<CString, CString>) -> anyhow::Result<Status> {
         if args.len() > 1 {
-            chdir(args[1].as_c_str())
-                .map(|_| Status::Success)
-                .map_err(|err| println!("{}", err.to_string()))?;
+            chdir(args[1].as_c_str()).map(|_| Status::Success)?;
         } else {
             chdir(
                 env_map
                     .get(&CString::new("HOME").unwrap())
-                    .expect(
-                        "You used cd without arguments, but HOME is not specified in the envpath!",
-                    )
+                    .expect("You used cd without arguments, but HOME is not specified in the env!")
                     .as_c_str(),
             )
-            .map(|_| Status::Success)
-            .map_err(|err| println!("{}", err.to_string()))?;
+            .map(|_| Status::Success)?;
         }
         Ok(Status::Success)
     }
 
-    fn rsh_help(_args: &Vec<CString>) -> Result<Status, ()> {
+    fn rsh_help(_args: &Vec<CString>) -> anyhow::Result<Status> {
         println!("Woody's re-implemantation of lsh, written in Rust.",);
         println!("Type command and arguments, and hit enter.",);
         // println!("The following commands are built in:",);
         Ok(Status::Success)
     }
 
-    fn rsh_exit(_args: &Vec<CString>) -> Result<Status, ()> {
+    fn rsh_exit(_args: &Vec<CString>) -> anyhow::Result<Status> {
         Ok(Status::Exit)
     }
 
-    fn rsh_pwd(_args: &Vec<CString>) -> Result<Status, ()> {
-        println!("{:?}", getcwd().unwrap());
+    fn rsh_pwd(_args: &Vec<CString>) -> anyhow::Result<Status> {
+        println!("{:?}", getcwd()?);
         Ok(Status::Success)
     }
 
-    fn rsh_which(argv: &Vec<CString>, env_map: &HashMap<CString, CString>) -> Result<Status, ()> {
+    fn rsh_which(
+        argv: &Vec<CString>,
+        env_map: &HashMap<CString, CString>,
+    ) -> anyhow::Result<Status> {
         let paths = &(env_map
             .get(&CString::new("PATH").unwrap())
             .expect("PATH is not specified in the env!"))
