@@ -98,19 +98,16 @@ pub mod rush {
                 "exit" => rsh_exit(&command_config.argv),
                 "pwd" => rsh_pwd(&command_config.argv),
                 "which" => rsh_which(&command_config.argv, &env_map),
-                _ => {
-                    let result = rsh_launch(&command_config, env_vars);
-                    match result {
-                        Ok(status) => Ok(status),
-                        Err(error_type) => {
-                            println!("{:?}", error_type);
-                            Err(error_type)
-                        }
-                    }
-                }
+                _ => rsh_launch(&command_config, env_vars),
             };
         }
-        result
+        match result {
+            Ok(status) => Ok(status),
+            Err(error_type) => {
+                println!("{:?}", error_type);
+                Err(error_type)
+            }
+        }
     }
 
     fn rsh_launch(command_configs: &CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
@@ -163,7 +160,7 @@ pub mod rush {
             chdir(
                 env_map
                     .get(&CString::new("HOME").unwrap())
-                    .expect("You used cd without arguments, but HOME is not specified in the env!")
+                    .context("You used cd without arguments, but HOME is not specified in the env")?
                     .as_c_str(),
             )
             .map(|_| Status::Success)?;
