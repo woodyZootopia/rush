@@ -60,6 +60,7 @@ pub mod rush {
         vec_of_commands
     }
 
+    #[derive(Debug, PartialEq, Eq)]
     enum Status {
         Success,
         Exit,
@@ -231,6 +232,28 @@ pub mod rush {
                         .collect::<Vec<CommandConfig>>()
                 )
             }
+        }
+
+        #[test]
+        fn correct_cd() {
+            let env_path = CString::new("PATH=/bin:/usr/bin").unwrap();
+            let env_home = CString::new("HOME=/home/woody").unwrap();
+            let env_vars = &[env_path.as_ref(), env_home.as_ref()];
+            let env_map = obtain_env_val_map(env_vars);
+            assert_eq!(rsh_cd(&vec![], &env_map).unwrap(), Status::Success);
+        }
+
+        // When HOME doesn't exist...
+        #[test]
+        #[should_panic(
+            expected = "called `Result::unwrap()` on an `Err` value: You used cd without arguments, but HOME is not specified in the env"
+        )]
+        fn panic_cd() {
+            let env_path = CString::new("PATH=/bin:/usr/bin").unwrap();
+            let env_home = CString::new("aOME=/home/woody").unwrap();
+            let env_vars = &[env_path.as_ref(), env_home.as_ref()];
+            let env_map = obtain_env_val_map(env_vars);
+            (rsh_cd(&vec![], &env_map).unwrap());
         }
     }
 }
