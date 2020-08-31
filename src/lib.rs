@@ -155,7 +155,10 @@ pub mod rush {
 
     fn rsh_cd(args: &Vec<CString>, env_map: &HashMap<CString, CString>) -> anyhow::Result<Status> {
         if args.len() > 1 {
-            chdir(args[1].as_c_str()).map(|_| Status::Success)?;
+            let destination = args[1].as_c_str();
+            chdir(destination).with_context(|| {
+                format!("You wanted to chdir to {:?} but that failed", destination)
+            })?;
         } else {
             chdir(
                 env_map
