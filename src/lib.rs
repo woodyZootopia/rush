@@ -41,7 +41,6 @@ pub mod rush {
         let mut vec_of_commands = Vec::new();
         let mut inputs = line.split_ascii_whitespace();
         while let Some(command) = inputs.next() {
-            let mut pipe_found = false;
             let mut argv =
                 vec![CString::new(command).expect("Failed to convert your command to CString")];
             while let Some(arg) = inputs.next() {
@@ -50,7 +49,6 @@ pub mod rush {
                         CString::new(arg).expect("Failed to convert your arguments to CString"),
                     );
                 } else {
-                    pipe_found = true;
                     break;
                 }
             }
@@ -58,9 +56,6 @@ pub mod rush {
                 command: CString::new(command).unwrap(),
                 argv,
             });
-            if !pipe_found {
-                break;
-            }
         }
         vec_of_commands
     }
@@ -141,13 +136,6 @@ pub mod rush {
             }
             Err(err) => Err(err.into()),
         }
-    }
-
-    fn print_command(config: CommandConfig) {
-        println!(
-            "Command is {:?},\n args are {:?}",
-            config.command, config.argv
-        );
     }
 
     fn rsh_cd(args: &Vec<CString>, env_map: &HashMap<CString, CString>) -> anyhow::Result<Status> {
