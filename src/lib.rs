@@ -25,7 +25,7 @@ pub mod rush {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Eq)]
     struct CommandConfig {
         pub command: CString,
         pub argv: Vec<CString>,
@@ -205,5 +205,32 @@ pub mod rush {
             }
         }
         found_files
+    }
+    mod tests {
+        use super::*;
+        #[test]
+        fn parse_commands() {
+            let command_answer_pairs = vec![
+                ("ls some_file", vec![vec!["ls", "some_file"]]),
+                ("pwd some_file", vec![vec!["pwd", "some_file"]]),
+                (
+                    "cat some_file | less",
+                    vec![vec!["cat", "some_file"], vec!["less"]],
+                ),
+            ];
+            for (command, answers) in command_answer_pairs.iter() {
+                let command_config = split_to_commands(command);
+                assert_eq!(
+                    command_config,
+                    answers
+                        .iter()
+                        .map(|answer| CommandConfig {
+                            command: CString::new(answer[0]).unwrap(),
+                            argv: answer.iter().map(|x| CString::new(*x).unwrap()).collect()
+                        })
+                        .collect::<Vec<CommandConfig>>()
+                )
+            }
+        }
     }
 }
