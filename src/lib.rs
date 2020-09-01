@@ -17,18 +17,36 @@ pub mod rush {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure "> " above is printed
             let line = read_line();
-            let command_configs = split_to_commands(&line);
-            match execute(command_configs, env_vars) {
-                Ok(Status::Exit) => break,
-                _ => (),
+            let command_configs = split_to_commands(line);
+            if let Some(command_configs) = command_configs {
+                match execute(command_configs, env_vars) {
+                    Ok(Status::Exit) => break,
+                    _ => (),
+                }
             }
         }
     }
 
-    #[derive(Debug, PartialEq, Eq)]
-    struct CommandConfig {
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct CommandConfig {
         pub command: CString,
         pub argv: Vec<CString>,
+        pub successive_command: Option<SuccessiveCommand>,
+    }
+
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    pub struct SuccessiveCommand {
+        controlflow: ControlFlow,
+        commands: String,
+    }
+
+    #[derive(Debug, PartialEq, Eq, Clone)]
+    enum ControlFlow {
+        PIPE,
+        OR,
+        ANDAND,
+        SAME,
+        BOTH,
     }
 
     fn read_line() -> String {
@@ -37,27 +55,40 @@ pub mod rush {
         return input;
     }
 
-    fn split_to_commands<'a>(line: &'a str) -> Vec<CommandConfig> {
-        let mut vec_of_commands = Vec::new();
+    fn split_to_commands(line: String) -> Option<CommandConfig> {
         let mut inputs = line.split_ascii_whitespace();
-        while let Some(command) = inputs.next() {
+        if let Some(command) = inputs.next() {
             let mut argv =
                 vec![CString::new(command).expect("Failed to convert your command to CString")];
             while let Some(arg) = inputs.next() {
-                if arg != "|" {
-                    argv.push(
-                        CString::new(arg).expect("Failed to convert your arguments to CString"),
-                    );
-                } else {
-                    break;
+                if ["|", "||", "&", "&&", ";"].contains(&arg) {
+                    let controlflow = match arg {
+                        "|" => ControlFlow::PIPE,
+                        "||" => ControlFlow::OR,
+                        "&" => ControlFlow::ANDAND,
+                        "&&" => ControlFlow::SAME,
+                        ";" => ControlFlow::BOTH,
+                        _ => panic!(),
+                    };
+                    return Some(CommandConfig {
+                        command: CString::new(command).unwrap(),
+                        argv,
+                        successive_command: Some(SuccessiveCommand {
+                            controlflow,
+                            commands: inputs.collect::<String>(),
+                        }),
+                    });
                 }
+                argv.push(CString::new(arg).expect("Failed to convert your arguments to CString"));
             }
-            vec_of_commands.push(CommandConfig {
+            return Some(CommandConfig {
                 command: CString::new(command).unwrap(),
                 argv,
+                successive_command: None,
             });
+        } else {
+            return None;
         }
-        vec_of_commands
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -83,20 +114,20 @@ pub mod rush {
         env_map
     }
 
-    fn execute(command_configs: Vec<CommandConfig>, env_vars: &[&CStr]) -> anyhow::Result<Status> {
+    fn execute(command_config: CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
         let env_map = obtain_env_val_map(env_vars);
         let mut result: anyhow::Result<Status> =
             Err(anyhow::Error::new(nix::Error::UnsupportedOperation));
-        for command_config in command_configs {
-            result = match command_config.command.to_str().unwrap() {
-                "cd" => rsh_cd(&command_config.argv, &env_map),
-                "help" => rsh_help(&command_config.argv),
-                "exit" => rsh_exit(&command_config.argv),
-                "pwd" => rsh_pwd(&command_config.argv),
-                "which" => rsh_which(&command_config.argv, &env_map),
-                _ => rsh_launch(&command_config, env_vars),
-            };
-        }
+
+        result = match command_config.command.to_str().unwrap() {
+            "cd" => rsh_cd(&command_config.argv, &env_map),
+            "help" => rsh_help(&command_config.argv),
+            "exit" => rsh_exit(&command_config.argv),
+            "pwd" => rsh_pwd(&command_config.argv),
+            "which" => rsh_which(&command_config.argv, &env_map),
+            _ => rsh_launch(&command_config, env_vars),
+        };
+
         match result {
             Ok(status) => Ok(status),
             Err(error_type) => {
@@ -124,7 +155,7 @@ pub mod rush {
             Ok(ForkResult::Child) => {
                 // child
                 execvpe(
-                    &command_configs.command,
+                    command_configs.command.as_ref(),
                     &command_configs.argv[..]
                         .iter()
                         .map(AsRef::as_ref)
@@ -212,24 +243,28 @@ pub mod rush {
         #[test]
         fn parse_commands() {
             let command_answer_pairs = vec![
-                ("ls some_file", vec![vec!["ls", "some_file"]]),
-                ("pwd some_file", vec![vec!["pwd", "some_file"]]),
+                ("ls some_file", (vec!["ls", "some_file"], None)),
+                ("pwd some_file", (vec!["pwd", "some_file"], None)),
                 (
                     "cat some_file | less",
-                    vec![vec!["cat", "some_file"], vec!["less"]],
+                    (
+                        vec!["cat", "some_file"],
+                        Some(SuccessiveCommand {
+                            controlflow: ControlFlow::PIPE,
+                            commands: "less".into(),
+                        }),
+                    ),
                 ),
             ];
-            for (command, answers) in command_answer_pairs.iter() {
-                let command_config = split_to_commands(command);
+            for (command, answer) in command_answer_pairs.iter() {
+                let command_config = split_to_commands(command.to_owned().into());
                 assert_eq!(
-                    command_config,
-                    answers
-                        .iter()
-                        .map(|answer| CommandConfig {
-                            command: CString::new(answer[0]).unwrap(),
-                            argv: answer.iter().map(|x| CString::new(*x).unwrap()).collect()
-                        })
-                        .collect::<Vec<CommandConfig>>()
+                    command_config.unwrap(),
+                    CommandConfig {
+                        command: CString::new(answer.0[0]).unwrap(),
+                        argv: answer.0.iter().map(|x| CString::new(*x).unwrap()).collect(),
+                        successive_command: answer.1.clone()
+                    }
                 )
             }
         }
