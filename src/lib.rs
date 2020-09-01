@@ -75,7 +75,7 @@ pub mod rush {
                         argv,
                         successive_command: Some(SuccessiveCommand {
                             controlflow,
-                            commands: inputs.collect::<String>(),
+                            commands: inputs.collect::<Vec<_>>().join(" "),
                         }),
                     });
                 }
