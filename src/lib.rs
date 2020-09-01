@@ -11,13 +11,14 @@ pub mod rush {
     use std::io;
     use std::io::Write;
     use std::path::{Path, PathBuf};
+    use std::str::SplitAsciiWhitespace;
 
     pub fn main_loop(env_vars: &[&CStr]) {
         loop {
             print!("> ");
             io::stdout().flush().unwrap(); // make sure "> " above is printed
             let line = read_line();
-            let command_configs = split_to_commands(line);
+            let command_configs = split_out_command(line.split_ascii_whitespace());
             if let Some(command_configs) = command_configs {
                 match execute(command_configs, env_vars) {
                     Ok(Status::Exit) => break,
@@ -27,17 +28,17 @@ pub mod rush {
         }
     }
 
-    #[derive(Debug, PartialEq, Eq, Clone)]
-    pub struct CommandConfig {
+    #[derive(Debug, Clone)]
+    pub struct CommandConfig<'a> {
         pub command: CString,
         pub argv: Vec<CString>,
-        pub successive_command: Option<SuccessiveCommand>,
+        pub successive_command: Option<SuccessiveCommand<'a>>,
     }
 
-    #[derive(Debug, PartialEq, Eq, Clone)]
-    pub struct SuccessiveCommand {
+    #[derive(Debug, Clone)]
+    pub struct SuccessiveCommand<'a> {
         controlflow: ControlFlow,
-        commands: String,
+        commands: SplitAsciiWhitespace<'a>,
     }
 
     #[derive(Debug, PartialEq, Eq, Clone)]
@@ -55,8 +56,7 @@ pub mod rush {
         return input;
     }
 
-    fn split_to_commands(line: String) -> Option<CommandConfig> {
-        let mut inputs = line.split_ascii_whitespace();
+    fn split_out_command(mut inputs: SplitAsciiWhitespace) -> Option<CommandConfig> {
         if let Some(command) = inputs.next() {
             let mut argv =
                 vec![CString::new(command).expect("Failed to convert your command to CString")];
@@ -75,7 +75,7 @@ pub mod rush {
                         argv,
                         successive_command: Some(SuccessiveCommand {
                             controlflow,
-                            commands: inputs.collect::<Vec<_>>().join(" "),
+                            commands: inputs,
                         }),
                     });
                 }
@@ -252,7 +252,7 @@ pub mod rush {
                         vec!["cat", "some_file"],
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::PIPE,
-                            commands: "less".into(),
+                            commands: "less".split_ascii_whitespace(),
                         }),
                     ),
                 ),
@@ -262,7 +262,7 @@ pub mod rush {
                         vec!["cat", "some_file"],
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::OR,
-                            commands: "".into(),
+                            commands: "".split_ascii_whitespace(),
                         }),
                     ),
                 ),
@@ -276,7 +276,7 @@ pub mod rush {
                         vec!["cat", "some_file", ">", "out.txt"],
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::AND,
-                            commands: "ls || cat out.txt".into(),
+                            commands: "ls || cat out.txt".split_ascii_whitespace(),
                         }),
                     ),
                 ),
@@ -286,7 +286,7 @@ pub mod rush {
                         vec!["cat", "some_file", ">", "out.txt"],
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::SIMUL,
-                            commands: "ls || cat out.txt".into(),
+                            commands: "ls || cat out.txt".split_ascii_whitespace(),
                         }),
                     ),
                 ),
@@ -296,21 +296,26 @@ pub mod rush {
                         vec!["cat", "some_file", ">", "out.txt"],
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::BOTH,
-                            commands: "ls || cat out.txt".into(),
+                            commands: "ls || cat out.txt".split_ascii_whitespace(),
                         }),
                     ),
                 ),
             ];
             for (command, answer) in command_answer_pairs.iter() {
-                let command_config = split_to_commands(command.to_owned().into());
+                let command_config =
+                    split_out_command(command.split_ascii_whitespace().to_owned().into());
                 assert_eq!(
-                    command_config.unwrap(),
-                    CommandConfig {
-                        command: CString::new(answer.0[0]).unwrap(),
-                        argv: answer.0.iter().map(|x| CString::new(*x).unwrap()).collect(),
-                        successive_command: answer.1.clone()
-                    }
-                )
+                    command_config.clone().unwrap().command,
+                    CString::new(answer.0[0]).unwrap(),
+                );
+                assert_eq!(
+                    command_config.unwrap().argv,
+                    answer
+                        .0
+                        .iter()
+                        .map(|x| CString::new(*x).unwrap())
+                        .collect::<Vec<_>>()
+                );
             }
         }
 
