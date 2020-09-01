@@ -44,8 +44,8 @@ pub mod rush {
     enum ControlFlow {
         PIPE,
         OR,
-        ANDAND,
-        SAME,
+        AND,
+        SIMUL,
         BOTH,
     }
 
@@ -65,8 +65,8 @@ pub mod rush {
                     let controlflow = match arg {
                         "|" => ControlFlow::PIPE,
                         "||" => ControlFlow::OR,
-                        "&" => ControlFlow::ANDAND,
-                        "&&" => ControlFlow::SAME,
+                        "&&" => ControlFlow::AND,
+                        "&" => ControlFlow::SIMUL,
                         ";" => ControlFlow::BOTH,
                         _ => panic!(),
                     };
@@ -238,6 +238,7 @@ pub mod rush {
         }
         found_files
     }
+
     mod tests {
         use super::*;
         #[test]
@@ -252,6 +253,50 @@ pub mod rush {
                         Some(SuccessiveCommand {
                             controlflow: ControlFlow::PIPE,
                             commands: "less".into(),
+                        }),
+                    ),
+                ),
+                (
+                    "cat some_file ||    ",
+                    (
+                        vec!["cat", "some_file"],
+                        Some(SuccessiveCommand {
+                            controlflow: ControlFlow::OR,
+                            commands: "".into(),
+                        }),
+                    ),
+                ),
+                (
+                    "cat some_file > out.txt",
+                    (vec!["cat", "some_file", ">", "out.txt"], None),
+                ),
+                (
+                    "cat some_file > out.txt && ls || cat out.txt",
+                    (
+                        vec!["cat", "some_file", ">", "out.txt"],
+                        Some(SuccessiveCommand {
+                            controlflow: ControlFlow::AND,
+                            commands: "ls || cat out.txt".into(),
+                        }),
+                    ),
+                ),
+                (
+                    "cat some_file > out.txt & ls || cat   out.txt",
+                    (
+                        vec!["cat", "some_file", ">", "out.txt"],
+                        Some(SuccessiveCommand {
+                            controlflow: ControlFlow::SIMUL,
+                            commands: "ls || cat out.txt".into(),
+                        }),
+                    ),
+                ),
+                (
+                    "cat some_file > out.txt ; ls || cat out.txt",
+                    (
+                        vec!["cat", "some_file", ">", "out.txt"],
+                        Some(SuccessiveCommand {
+                            controlflow: ControlFlow::BOTH,
+                            commands: "ls || cat out.txt".into(),
                         }),
                     ),
                 ),
