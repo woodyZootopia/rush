@@ -18,8 +18,6 @@ pub fn obtain_env_val_map(env_vars: &[&CStr]) -> HashMap<CString, CString> {
 
 pub(crate) fn execute(command_config: CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
     let env_map = obtain_env_val_map(env_vars);
-    let mut result: anyhow::Result<Status> =
-        Err(anyhow::Error::new(nix::Error::UnsupportedOperation));
 
     if let Some(succ) = command_config.successive_command {
         match succ.controlflow {
@@ -82,7 +80,7 @@ pub(crate) fn execute(command_config: CommandConfig, env_vars: &[&CStr]) -> anyh
             _ => Ok(Status::Success),
         }
     } else {
-        result = match command_config.command.to_str().unwrap() {
+        let result = match command_config.command.to_str().unwrap() {
             "cd" => rsh_cd(&command_config.argv, &env_map),
             "help" => rsh_help(&command_config.argv),
             "exit" => rsh_exit(&command_config.argv),
