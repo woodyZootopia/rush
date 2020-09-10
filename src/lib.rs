@@ -10,8 +10,12 @@ pub mod rush {
     use std::fs;
     use std::io;
     use std::io::Write;
+    use std::os::unix::io::RawFd;
     use std::path::{Path, PathBuf};
     use std::str::SplitAsciiWhitespace;
+
+    const STDOUT_FILENO: i32 = 1;
+    const STDIN_FILENO: i32 = 0;
 
     pub fn main_loop(env_vars: &[&CStr]) {
         loop {
@@ -115,29 +119,92 @@ pub mod rush {
     }
 
     fn execute(command_config: CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
+        // eprintln!("{:?}", command_config);
         let env_map = obtain_env_val_map(env_vars);
         let mut result: anyhow::Result<Status> =
             Err(anyhow::Error::new(nix::Error::UnsupportedOperation));
 
-        result = match command_config.command.to_str().unwrap() {
-            "cd" => rsh_cd(&command_config.argv, &env_map),
-            "help" => rsh_help(&command_config.argv),
-            "exit" => rsh_exit(&command_config.argv),
-            "pwd" => rsh_pwd(&command_config.argv),
-            "which" => rsh_which(&command_config.argv, &env_map),
-            _ => rsh_launch(&command_config, env_vars),
-        };
+        if let Some(succ) = command_config.successive_command {
+            match succ.controlflow {
+                ControlFlow::PIPE => {
+                    let fd = pipe2(nix::fcntl::OFlag::O_CLOEXEC)?;
+                    match fork() {
+                        Ok(ForkResult::Parent { child: child1 }) => match fork() {
+                            Ok(ForkResult::Parent { child: child2 }) => {
+                                loop {
+                                    let waitresult = waitpid(child2, Some(WaitPidFlag::WUNTRACED));
+                                    match waitresult.unwrap() {
+                                        WaitStatus::Exited(..) | WaitStatus::Signaled(..) => {
+                                            break;
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                loop {
+                                    let waitresult = waitpid(child1, Some(WaitPidFlag::WUNTRACED));
+                                    match waitresult.unwrap() {
+                                        WaitStatus::Exited(..) | WaitStatus::Signaled(..) => {
+                                            break Ok(Status::Success)
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
 
-        match result {
-            Ok(status) => Ok(status),
-            Err(error_type) => {
-                println!("{:?}", error_type);
-                Err(error_type)
+                            Ok(ForkResult::Child) => {
+                                // child 2
+                                // only write to successive_command
+                                close(fd.0)?;
+                                dup2(fd.1, STDOUT_FILENO)?;
+                                close(fd.1)?;
+                                execute(
+                                    CommandConfig {
+                                        successive_command: None,
+                                        ..command_config
+                                    },
+                                    env_vars,
+                                )?;
+                                Ok(Status::Exit)
+                            }
+                            Err(err) => Err(err.into()),
+                        },
+
+                        Ok(ForkResult::Child) => {
+                            // child 1
+                            // only read from previous command
+                            close(fd.1)?;
+                            dup2(fd.0, STDIN_FILENO)?;
+                            close(fd.0)?;
+                            let command_config = split_out_command(succ.commands).unwrap();
+                            execute(command_config, env_vars)?;
+                            Ok(Status::Exit)
+                        }
+                        Err(err) => Err(err.into()),
+                    }
+                }
+                _ => Ok(Status::Success),
+            }
+        } else {
+            result = match command_config.command.to_str().unwrap() {
+                "cd" => rsh_cd(&command_config.argv, &env_map),
+                "help" => rsh_help(&command_config.argv),
+                "exit" => rsh_exit(&command_config.argv),
+                "pwd" => rsh_pwd(&command_config.argv),
+                "which" => rsh_which(&command_config.argv, &env_map),
+                _ => rsh_launch(&command_config, env_vars),
+            };
+
+            match result {
+                Ok(status) => Ok(status),
+                Err(error_type) => {
+                    println!("{:?}", error_type);
+                    Err(error_type)
+                }
             }
         }
     }
 
-    fn rsh_launch(command_configs: &CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
+    fn rsh_launch(command_config: &CommandConfig, env_vars: &[&CStr]) -> anyhow::Result<Status> {
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
                 // parent
@@ -155,15 +222,15 @@ pub mod rush {
             Ok(ForkResult::Child) => {
                 // child
                 execvpe(
-                    command_configs.command.as_ref(),
-                    &command_configs.argv[..]
+                    command_config.command.as_ref(),
+                    &command_config.argv[..]
                         .iter()
                         .map(AsRef::as_ref)
                         .collect::<Vec<&CStr>>()
                         .as_ref(),
                     env_vars,
                 )
-                .with_context(|| format!("{:?}: command not found", command_configs.command))?;
+                .with_context(|| format!("{:?}: command not found", command_config.command))?;
                 Ok(Status::Exit)
             }
             Err(err) => Err(err.into()),
@@ -246,6 +313,7 @@ pub mod rush {
             let command_answer_pairs = vec![
                 ("ls some_file", (vec!["ls", "some_file"], None)),
                 ("pwd some_file", (vec!["pwd", "some_file"], None)),
+                ("echo wow", (vec!["echo", "wow"], None)),
                 (
                     "cat some_file | less",
                     (
