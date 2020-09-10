@@ -1,5 +1,4 @@
-mod lib;
-use crate::lib::rush;
+use rust_shell::rush;
 use std::ffi::CString;
 
 fn main() {
